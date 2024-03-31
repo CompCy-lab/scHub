@@ -1,0 +1,35 @@
+# Temp files
+.DS_Store
+*~
+buck-out/
+
+# Compiled files
+.venv/
+.sphinx/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution / packaging
+/build/
+/dist/
+/*.egg-info/
+
+# Tests and coverage
+/.pytest_cache/
+/.cache/
+/data/
+
+# docs
+/docs/generated/
+/docs/_build/
+/docs/**/.ipynb_checkpoints/
+/docs/tutorials/**/*data
+
+# tests
+/tests/*data
+/tests/pretrained_models
+
+# IDEs
+/.idea/
+/.vscode/
