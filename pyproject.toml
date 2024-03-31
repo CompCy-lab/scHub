@@ -1,16 +1,23 @@
 [build-system]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
-requires = ["hatchling"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/schub/_version.py"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["tests/", "tests/*", "data", "data/*"]
+only-include = ["src/schub", "docs", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+exclude = ["docs/**/*data", "tests/**/*data", "tests/**/pretrained_models"]
 
 [tool.hatch.build.targets.wheel]
-exclude = ["tests/", "tests/*", "data", "data/*"]
+packages = ["src/schub"]
 
 [project]
 name = "scHub"
-version = "0.0.1"
+dynamic = ["version"]
 description = "The collections of methods for single-cell studies developed in CompCy lab at UNC-Chapel Hill"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -53,6 +60,7 @@ doc = [
     # For notebooks
     "ipykernel",
     "ipython",
+    "jupyterlab",
     "sphinx-copybutton",
     "pandas",
 ]
@@ -90,6 +98,7 @@ line-length = 120
 [tool.ruff]
 src = ["src"]
 line-length = 120
+exclude = ["src/**/__init__.py"]
 
 [tool.ruff.lint]
 select = [
