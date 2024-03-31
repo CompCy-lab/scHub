@@ -1,8 +1,8 @@
 import sys
 
-from . import data, model, tl, utils
-from . import preprocessing as pp
 from ._constants import REGISTRY_KEYS
+from . import data, utils, tl, model
+from . import preprocessing as pp
 
 try:
     from ._version import version as __version__
