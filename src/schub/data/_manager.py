@@ -1,0 +1,396 @@
+import sys
+from collections import defaultdict
+from copy import deepcopy
+from typing import Optional
+from uuid import uuid4
+
+import rich
+from mudata import MuData
+from rich.pretty import pprint
+from rich.table import Table
+
+import schub
+from schub.utils import AttrDict
+
+from . import _constants
+from ._types import AnnOrMuData
+from ._utils import _assign_adata_uuid, _check_if_view, _check_mudata_fully_paired, get_anndata_attribute
+from .fields import AnnDataField
+
+
+class AnnDataManager:
+    """Provides an interface to validate and process an AnnData object"""
+
+    def __init__(
+        self,
+        fields: list[AnnDataField] = None,
+        setup_method_args: Optional[dict] = None,
+    ) -> None:
+        self.id = str(uuid4())
+        self.adata = None
+        self.fields = fields or []
+        self._registry = {
+            _constants._SCHUB_VERSION_KEY: schub.__version__,
+            _constants._MODEL_NAME_KEY: None,
+            _constants._SETUP_ARGS_KEY: None,
+            _constants._FIELD_REGISTRIES_KEY: defaultdict(dict),
+        }
+        if setup_method_args is not None:
+            self._registry.update(setup_method_args)
+
+    def _assert_anndata_registered(self):
+        """Asserts that an AnnData object has been registered with the instance"""
+        if self.adata is None:
+            raise AssertionError("AnnData object not registered. Please call register_fields")
+
+    @staticmethod
+    def _validate_anndata_object(adata: AnnOrMuData):
+        """For a given AnnData object, runs general schub compatibility checks."""
+        _check_if_view(adata, copy_if_view=False)
+
+        if isinstance(adata, MuData):
+            _check_mudata_fully_paired(adata)
+
+    def _get_setup_method_args(self) -> dict:
+        """Get the setup method from self._registry"""
+        return {
+            k: v for k, v in self._registry.items() if k in {_constants._MODEL_NAME_KEY, _constants._SETUP_ARGS_KEY}
+        }
+
+    def _assign_uuid(self):
+        """Assigns a UUID unique to the AnnData object. If already present, the UUID is left alone."""
+        self._assert_anndata_registered()
+
+        _assign_adata_uuid(self.adata)
+
+        schub_uuid = self.adata.uns[_constants._SCHUB_UUID_KEY]
+        self._registry[_constants._SCHUB_UUID_KEY] = schub_uuid
+
+    def _assign_most_recent_manager_uuid(self):
+        """Assigns a last manager UUID to the AnnData object for future validation."""
+        self._assert_anndata_registered()
+
+        self.adata.uns[_constants._MANAGER_UUID_KEY] = self.id
+
+    def _assign_setup_args(self):
+        self._assert_anndata_registered()
+
+        self.adata.uns.update(self._get_setup_method_args())
+
+    def register_fields(
+        self,
+        adata: AnnOrMuData,
+        source_registry: Optional[dict] = None,
+        **transfer_kwargs,
+    ):
+        """Register fields to the input `adata`.
+
+        Registers each field associated with this instance with the AnnData object. Either registers or transfers
+        the setup from `source_setup_dict` if passed in. Sets ``self.adata``.
+
+        Parameters
+        ----------
+        adata
+            AnnData object to be registered.
+        source_registry
+            Registry created after registering an AnnData using an :class:`~schub.data.AnnDataManager` object.
+        transfer_kwargs
+            Additional keywords which modify transfer behavior. Only applicable if ``source_registry`` is set.
+        """
+        if self.adata is not None:
+            raise AssertionError("Existing AnnData object registered with this Manager instance.")
+
+        if source_registry is None and transfer_kwargs:
+            raise TypeError(
+                f"register_fields() got unexpected keyword arguments {transfer_kwargs} "
+                f"passed without a source_registry."
+            )
+
+        self._validate_anndata_object(adata)
+
+        for field in self.fields:
+            self._add_field(
+                field=field,
+                adata=adata,
+                source_registry=source_registry,
+                **transfer_kwargs,
+            )
+
+        # Save arguments for register_fields.
+        self._source_registry = deepcopy(source_registry)
+        self._transfer_kwargs = deepcopy(transfer_kwargs)
+
+        self.adata = adata
+        self._assign_uuid()
+        self._assign_most_recent_manager_uuid()
+        self._assign_setup_args()
+
+    def _add_field(
+        self,
+        field: AnnDataField,
+        adata: AnnOrMuData,
+        source_registry: Optional[dict] = None,
+        **transfer_kwargs,
+    ):
+        """Internal function for adding a field with optional transferring."""
+        field_registries = self._registry[_constants._FIELD_REGISTRIES_KEY]
+        field_registries[field.registry_key] = {
+            _constants._DATA_REGISTRY_KEY: field.get_data_registry(),
+            _constants._STATE_REGISTRY_KEY: {},
+        }
+        field_registry = field_registries[field.registry_key]
+
+        # A field can be empty if the model has optional fields (e.g. extra covariates).
+        # If empty, we skip registering the field.
+        if not field.is_empty:
+            # Transfer case: Source registry is used for validation and/or setup.
+            if source_registry is not None:
+                field_registry[_constants._STATE_REGISTRY_KEY] = field.transfer_field(
+                    source_registry[_constants._FIELD_REGISTRIES_KEY][field.registry_key][
+                        _constants._STATE_REGISTRY_KEY
+                    ],
+                    adata_target=adata,
+                    **transfer_kwargs,
+                )
+            else:
+                field_registry[_constants._STATE_REGISTRY_KEY] = field.register_field(adata=adata)
+        # Compute and set summary stats for the given field.
+        state_registry = field_registry[_constants._STATE_REGISTRY_KEY]
+        field_registry[_constants._SUMMARY_STATS_KEY] = field.get_summary_stats(state_registry=state_registry)
+
+    def register_new_fields(self, fields: list[AnnDataField]):
+        """Register new fields
+
+        Register new fields to a manager instance. This is useful to augment the functionality of an existing manager.
+
+        Parameters
+        ----------
+        fields
+            List of AnnDataFields to register
+        """
+        if self.adata is None:
+            raise AssertionError("No AnnData object has been registered with this Manager instance.")
+        self.validate()
+        for field in fields:
+            self._add_field(
+                field=field,
+                adata=self.adata,
+            )
+
+        # Source registry is not None if this manager was created from transfer_fields
+        # In this case self._registry is originally equivalent to self._source_registry
+        # However, with newly registered fields the equality breaks, so we reset it
+        if self._source_registry is not None:
+            self._source_registry = deepcopy(self._registry)
+
+        self.fields += fields
+
+    def transfer_fields(self, adata_target: AnnOrMuData, **kwargs):
+        """
+        Transfers an existing setup to each field associated with this instance with the target AnnData object.
+
+        Parameters
+        ----------
+        adata_target
+            AnnData object to be registered.
+        kwargs
+            Additional keywords which modify transfer behavior.
+        """
+        self._assert_anndata_registered()
+
+        fields = self.fields
+        new_adata_manager = self.__class__(fields=fields, setup_method_args=self._get_setup_method_args())
+        new_adata_manager.register_fields(adata_target, self._registry, **kwargs)
+        return new_adata_manager
+
+    def validate(self) -> None:
+        """Checks if AnnData was last setup with this AnnDataManager instance and register it if not."""
+        self._assert_anndata_registered()
+        most_recent_manager_id = self.adata.uns[_constants._MANAGER_UUID_KEY]
+        # Re-register fields with same arguments if this AnnData object has been
+        # registered with a different AnnDataManager.
+        if most_recent_manager_id != self.id:
+            adata, self.adata = self.adata, None  # Reset self.adata.
+            self.register_fields(adata, self._source_registry, **self._transfer_kwargs)
+
+    def update_setup_method_args(self, setup_method_args: dict):
+        """
+        Update setup method args.
+
+        Parameters
+        ----------
+        setup_method_args
+            This is a bit of a misnomer, this is a dict representing kwargs
+            of the setup method that will be used to update the existing values
+            in the registry of this instance.
+        """
+        self._registry[_constants._SETUP_ARGS_KEY].update(setup_method_args)
+
+    @property
+    def adata_uuid(self) -> str:
+        """Returns the UUID for the AnnData object registered with this instance."""
+        self._assert_anndata_registered()
+
+        return self._registry[_constants._SCHUB_UUID_KEY]
+
+    @property
+    def registry(self) -> dict:
+        """Returns the top-level registry dict for the AnnData object registered with this instance as an attrdict."""
+        return self._registry
+
+    @property
+    def data_registry(self) -> AttrDict:
+        """Returns the data registry for the AnnData object registered with this instance."""
+        self._assert_anndata_registered()
+        return self._get_data_registry_from_registry(self._registry)
+
+    @staticmethod
+    def _get_data_registry_from_registry(registry: dict):
+        data_registry = {}
+        for registry_key, field_registry in registry[_constants._FIELD_REGISTRIES_KEY].items():
+            field_data_registry = field_registry[_constants._DATA_REGISTRY_KEY]
+            if field_data_registry:
+                data_registry[registry_key] = field_data_registry
+        return AttrDict(data_registry)
+
+    @property
+    def summary_stats(self) -> AttrDict:
+        """Returns the summary stats for the AnnData object registered with this instance."""
+        self._assert_anndata_registered()
+
+        summary_stats = {}
+        for field_registry in self._registry[_constants._FIELD_REGISTRIES_KEY].values():
+            field_summary_stats = field_registry[_constants._SUMMARY_STATS_KEY]
+            summary_stats.update(field_summary_stats)
+
+        return AttrDict(summary_stats)
+
+    def get_from_registry(self, registry_key: str) -> dict:
+        """
+        Returns the object in AnnData associated with the key in the data registry.
+
+        Parameters
+        ----------
+        registry_key
+            key of object to get from ``self.data_registry``
+
+        Returns
+        -------
+        The requested data.
+        """
+        data_loc = self.data_registry[registry_key]
+        mod_key, attr_name, attr_key, attr_len = (
+            getattr(data_loc, _constants._DR_MOD_KEY, None),
+            data_loc[_constants._DR_ATTR_NAME],
+            data_loc[_constants._DR_ATTR_KEY],
+            data_loc[_constants._DR_ATTR_LEN],
+        )
+
+        return {
+            _constants._DR_ATTR_LEN: attr_len,
+            _constants._DR_ATTR_DATA: get_anndata_attribute(self.adata, attr_name, attr_key, mod_key=mod_key),
+        }
+
+    def get_state_registry(self, registry_key: str) -> AttrDict:
+        """Returns the state registry for the AnnDataField registered with this instance."""
+        self._assert_anndata_registered()
+
+        return AttrDict(self._registry[_constants._FIELD_REGISTRIES_KEY][registry_key][_constants._STATE_REGISTRY_KEY])
+
+    def _view_summary_stats(self) -> Table:
+        """Prints summary stats."""
+        t = Table(title="Summary Statistics")
+        t.add_column(
+            "Summary Stat Key",
+            justify="center",
+            style="dodger_blue1",
+            no_wrap=True,
+            overflow="fold",
+        )
+        t.add_column(
+            "Value",
+            justify="center",
+            style="dark_violet",
+            no_wrap=True,
+            overflow="fold",
+        )
+        for stat_key, count in self.summary_stats.items():
+            t.add_row(stat_key, str(count))
+        return t
+
+    def _view_data_registry(self) -> Table:
+        """Prints data registry."""
+        t = Table(title="Data Registry")
+        t.add_column(
+            "Registry Key",
+            justify="center",
+            style="dodger_blue1",
+            no_wrap=True,
+            overflow="fold",
+        )
+        t.add_column(
+            "scHub Location",
+            justify="center",
+            style="dark_violet",
+            no_wrap=True,
+            overflow="fold",
+        )
+
+        for registry_key, data_loc in self.data_registry.items():
+            mod_key = getattr(data_loc, _constants._DR_MOD_KEY, None)
+            attr_name = data_loc.attr_name
+            attr_key = data_loc.attr_key
+            schub_data_str = "adata"
+            if mod_key is not None:
+                schub_data_str += f".mod['{mod_key}']"
+            if attr_key is None:
+                schub_data_str += f".{attr_name}"
+            else:
+                schub_data_str += f".{attr_name}['{attr_key}']"
+            t.add_row(registry_key, schub_data_str)
+
+        return t
+
+    @staticmethod
+    def view_setup_method_args(registry: dict) -> None:
+        """
+        Prints setup kwargs used to produce a given registry.
+
+        Parameters
+        ----------
+        registry
+            Registry produced by an AnnDataManager.
+        """
+        model_name = registry[_constants._MODEL_NAME_KEY]
+        setup_args = registry[_constants._SETUP_ARGS_KEY]
+        if model_name is not None and setup_args is not None:
+            rich.print(f"Setup via `{model_name}.setup_anndata` with arguments:")
+            pprint(setup_args)
+            rich.print()
+
+    def view_registry(self, hide_state_registries: bool = False) -> None:
+        """
+        Prints summary of the registry.
+
+        Parameters
+        ----------
+        hide_state_registries
+            If True, prints a shortened summary without details of each state registry.
+        """
+        version = self._registry[_constants._SCHUB_VERSION_KEY]
+        rich.print(f"Anndata setup with schub version {version}.")
+        rich.print()
+        self.view_setup_method_args(self._registry)
+
+        in_colab = "google.colab" in sys.modules
+        force_jupyter = None if not in_colab else True
+        console = rich.console.Console(force_jupyter=force_jupyter)
+        console.print(self._view_summary_stats())
+        console.print(self._view_data_registry())
+
+        if not hide_state_registries:
+            for field in self.fields:
+                state_registry = self.get_state_registry(field._registry_key)
+                t = field.view_state_registry(state_registry=state_registry)
+                if t is not None:
+                    console.print(t)
