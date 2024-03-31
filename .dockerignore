@@ -1,0 +1,22 @@
+.git
+
+build
+dist
+*.egg-info
+*.egg
+*.pyc
+*.swp
+
+.coverage
+html/*
+**/__pycache__
+
+# Compiled Documentation
+docs/_build
+
+# notebooks
+**/.ipynb_checkpoints
+
+# envs
+.venv
+.sphinx
