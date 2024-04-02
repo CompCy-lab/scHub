@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python: ["3.8", "3.9", "3.10", "3.11"]
+        python: ["3.9", "3.10", "3.11"]
 
     name: ${{ matrix.name }} Python ${{ matrix.python }}
 
@@ -33,6 +33,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v4
         with:
