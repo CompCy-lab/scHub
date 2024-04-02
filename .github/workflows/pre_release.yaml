@@ -11,7 +11,7 @@ jobs:
     name: Publish pre-release Python distributions to TestPyPI
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: testpypi
       url: https://test.pypi.org/p/schub
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
