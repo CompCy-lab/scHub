@@ -51,14 +51,14 @@ class TestDeepLearningModels:
 
         # test resuming the training from checkpoint
         model = CytoSet.from_pretrained(
-            os.path.join(save_dir, "checkpoint-40"), adata=os.path.join(save_dir, "pretrained_model", "adata.h5ad")
+            os.path.join(save_dir, "checkpoint-20"), adata=os.path.join(save_dir, "pretrained_model", "adata.h5ad")
         )
         model.train(
             num_epochs=24,
             per_device_batch_size=3,
             save_dir=save_dir,
             logging_steps=1,
-            resume_from_checkpoint=os.path.join(save_dir, "checkpoint-40"),
+            resume_from_checkpoint=os.path.join(save_dir, "checkpoint-20"),
         )
 
 
