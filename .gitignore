@@ -9,6 +9,7 @@ buck-out/
 __pycache__/
 .mypy_cache/
 .ruff_cache/
+src/schub/_version.py
 
 # Distribution / packaging
 /build/
