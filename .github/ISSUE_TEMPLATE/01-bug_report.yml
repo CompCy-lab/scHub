@@ -1,0 +1,96 @@
+name: Bug report
+description: Report something that is broken or incorrect
+labels: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Note**: Please read [this guide](https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports)
+        detailing how to provide the necessary information for us to reproduce your bug. In brief:
+          * Please provide exact steps how to reproduce the bug in a clean Python environment.
+          * In case it's not clear what's causing this bug, please provide the data or the data generation procedure.
+          * Sometimes it is not possible to share the data, but usually it is possible to replicate problems on publicly
+            available datasets or to share a subset of your data.
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: versions
+    attributes:
+      label: Version information
+      description: |
+        Please paste below the output of
+
+        ```python
+        import session_info
+        session_info.show(html=False, dependencies=True)
+        ```
+      placeholder: |
+        -----
+        schub               0.1.dev2+g95c5e4f.d20240331
+        session_info        1.0.0
+        -----
+        PIL                 10.1.0
+        addict              2.4.0
+        anndata             0.10.3
+        certifi             2023.11.17
+        cffi                1.16.0
+        charset_normalizer  3.3.2
+        cycler              0.12.1
+        cython_runtime      NA
+        dateutil            2.8.2
+        exceptiongroup      1.2.0
+        filelock            3.13.1
+        h5py                3.10.0
+        huggingface_hub     0.19.4
+        idna                3.6
+        joblib              1.3.2
+        kiwisolver          1.4.5
+        llvmlite            0.41.1
+        matplotlib          3.8.2
+        mpl_toolkits        NA
+        mpmath              1.3.0
+        mudata              0.2.3
+        natsort             8.4.0
+        numba               0.58.1
+        numpy               1.26.2
+        nvfuser             NA
+        packaging           23.2
+        pandas              2.1.3
+        pkg_resources       NA
+        pycparser           2.21
+        pygments            2.17.2
+        pynndescent         0.5.11
+        pyparsing           3.1.1
+        pytz                2023.3.post1
+        requests            2.31.0
+        rich                NA
+        scanpy              1.9.3
+        scipy               1.11.4
+        setuptools          69.2.0
+        setuptools_scm      NA
+        six                 1.16.0
+        sklearn             1.3.2
+        sympy               1.12
+        threadpoolctl       3.2.0
+        tokenizers          0.15.0
+        tomli               2.0.1
+        torch               2.0.1+cu117
+        tqdm                4.66.1
+        transformers        4.16.2
+        typing_extensions   NA
+        umap                0.5.5
+        urllib3             2.1.0
+        yaml                6.0.1
+        zoneinfo            NA
+        -----
+        Python 3.10.13 (main, Dec  6 2023, 20:04:19) [GCC 7.5.0]
+        Linux-5.4.0-150-generic-x86_64-with-glibc2.27
+        -----
+        Session information updated at 2024-04-01 15:49
