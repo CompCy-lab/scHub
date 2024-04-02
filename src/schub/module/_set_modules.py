@@ -133,8 +133,6 @@ class DeepSet(PreTrainedModel):
         prediction_scores = self.classify_layer(self.fc(hidden_state))
         if label.ndim > 1:
             label = label.squeeze()
-        print(X.shape)
-        print(label.shape)
 
         loss = None
         if label is not None:
