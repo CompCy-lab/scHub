@@ -48,7 +48,9 @@ dependencies = [
 dev = [
     "pre-commit",
     "twine>=4.0.2",
+    "importlib-metadata",
     "pkginfo>=1.10.0",
+    "setuptools_scm",
 ]
 doc = [
     "docutils>=0.8,!=0.18.*,!=0.19.*",
