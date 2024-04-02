@@ -27,7 +27,6 @@ __pycache__/
 /docs/tutorials/**/*data
 
 # tests
-/tests/*data
 /tests/pretrained_models
 
 # IDEs
