@@ -150,7 +150,3 @@ class TestMachineLearningModels:
 
         assert adata.uns["delve"]["delta_mean"].shape == (num_subsamples, adata.n_vars)
         assert "delve" in adata.var.keys()
-
-
-if __name__ == "__main__":
-    TestDeepLearningModels().test_cytoset()
