@@ -20,6 +20,7 @@ src/schub/_version.py
 /.pytest_cache/
 /.cache/
 /data/
+/node_modules/
 
 # docs
 /docs/generated/
